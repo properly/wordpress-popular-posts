@@ -3,7 +3,7 @@
 Plugin Name: WordPress Popular Posts - Post array
 Plugin URI: https://github.com/properly/wordpress-popular-posts
 Description: Fork of Wordpress popular posts
-Version: 1.0
+Version: 4.0.0
 Author: Daniella Valentin
 Author URI: http://danivalentin.net
 Author Email: dani.valentin@gmail.com
