@@ -1,5 +1,6 @@
 {
   "name": "properly/wordpress-popular-posts",
+  "type": "wordpress-plugin",
   "autoload": {
     "psr-0" : {
       "Properly\\WordpressPopularPosts" : "src"
