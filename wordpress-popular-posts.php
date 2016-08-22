@@ -1507,7 +1507,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 			);
 
 			$prefix = $wpdb->prefix . "popularposts";
-			$fields = "p.ID AS 'id', p.post_title AS 'title', p.post_date AS 'date', p.post_author AS 'uid'";
+			$fields = "*";
 			$from = "";
 			$where = "WHERE 1 = 1";
 			$orderby = "";
