@@ -162,6 +162,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 			'freshness' => false,
 			'order_by' => 'views',
 			'post_type' => 'post,page',
+      'post_formats' => '',
 			'pid' => '',
 			'author' => '',
 			'cat' => '',
@@ -1629,6 +1630,64 @@ if ( !class_exists('WordpressPopularPosts') ) {
 
 			}
 
+			// * post formats
+			if ( !empty($instance['post_formats']) && $join_cats ) {
+
+        $available = array('video', 'audio', 'image');
+        $post_formats = explode(',', $instance['post_formats']);
+
+        // if standard selected, must exclude other
+        $exclude = in_array('standard', $post_formats);
+        $tax_query = ($exclude) ? $available : array();
+
+        foreach($post_formats as $format) {
+          $format = trim($format);
+
+          if ($format != 'standard') {
+            if ($exclude) {
+              array_splice($tax_query, array_search($format, $tax_query), 1);
+            } else {
+              $tax_query[] = $format;
+            }
+          }
+        }
+
+        $q = array();
+        foreach ($tax_query as $t) {
+          $q[] = '\'post-format-' . $t . '\'';
+        }
+
+        $q = implode(',', $q);
+        $in = ($exclude) ? 'NOT IN' : 'IN';
+
+        //get ids
+        $format_query = "SELECT term_id FROM wp_terms WHERE slug IN({$q})";
+        $result_formats = $wpdb->get_results($format_query, ARRAY_A);
+        $ids = array();
+
+        foreach($result_formats as $r) {
+          $ids[] = $r['term_id'];
+        };
+
+        $ids_str = implode(',', $ids);
+
+				if (!$exclude) {
+					$where .= " AND p.ID IN (
+						SELECT object_id
+						FROM {$wpdb->term_relationships} AS r
+							 JOIN {$wpdb->term_taxonomy} AS x ON x.term_taxonomy_id = r.term_taxonomy_id
+						WHERE x.taxonomy = 'post_format' AND x.term_id IN({$ids_str})
+          )";
+				} else {
+					$where .= " AND p.ID NOT IN (
+						SELECT object_id
+						FROM {$wpdb->term_relationships} AS r
+							 JOIN {$wpdb->term_taxonomy} AS x ON x.term_taxonomy_id = r.term_taxonomy_id
+						WHERE x.taxonomy = 'post_format' AND x.term_id IN({$ids_str})
+						)";
+				}
+			}
+
 			// * authors
 			if ( !empty($instance['author']) ) {
 
@@ -1901,14 +1960,13 @@ if ( !class_exists('WordpressPopularPosts') ) {
 		 * @return	string
 		 */
 		private function __render_popular_post($p, $instance) {
-
 			// WPML support, based on Serhat Evren's suggestion - see http://wordpress.org/support/topic/wpml-trick#post-5452607
 			if ( defined('ICL_LANGUAGE_CODE') && function_exists('icl_object_id') ) {
-				$current_id = icl_object_id( $p->id, get_post_type( $p->id ), true, ICL_LANGUAGE_CODE );
+				$current_id = icl_object_id( $p->ID, get_post_type( $p->ID ), true, ICL_LANGUAGE_CODE );
 				$permalink = get_permalink( $current_id );
 			} // Get original permalink
 			else {
-				$permalink = get_permalink($p->id);
+				$permalink = get_permalink($p->ID);
 			}
 
 			$title = $this->_get_title($p, $instance);
@@ -1937,11 +1995,11 @@ if ( !class_exists('WordpressPopularPosts') ) {
 					'stats' => $_stats,
 					'img' => ( !empty($thumb) ) ? '<a href="'.$permalink.'" title="'. esc_attr($title) .'" target="' . $this->user_settings['tools']['link']['target'] . '">' . $thumb . '</a>' : '',
 					'img_no_link' => $thumb,
-					'id' => $p->id,
+					'id' => $p->ID,
 					'url' => $permalink,
 					'text_title' => esc_attr($title),
 					'category' => $post_cat,
-					'author' => '<a href="' . get_author_posts_url($p->uid) . '">' . $author . '</a>',
+					'author' => '<a href="' . get_author_posts_url($p->guid) . '">' . $author . '</a>',
 					'views' => ($instance['order_by'] == "views" || $instance['order_by'] == "comments") ? number_format_i18n( $pageviews ) : number_format_i18n( $pageviews, 2 ),
 					'comments' => number_format_i18n( $comments ),
 					'date' => $date
@@ -1953,7 +2011,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 			// build regular layout
 			else {
 				$thumb = ( !empty($thumb) )
-				  ? '<a ' . ( ( $this->current_post_id == $p->id ) ? '' : 'href="' . $permalink . '"' ) . ' title="' . esc_attr($title) . '" target="' . $this->user_settings['tools']['link']['target'] . '">' . $thumb . '</a> '
+				  ? '<a ' . ( ( $this->current_post_id == $p->ID ) ? '' : 'href="' . $permalink . '"' ) . ' title="' . esc_attr($title) . '" target="' . $this->user_settings['tools']['link']['target'] . '">' . $thumb . '</a> '
 				  : '';
 
 				$_stats = ( !empty($_stats) )
@@ -1961,9 +2019,9 @@ if ( !class_exists('WordpressPopularPosts') ) {
 				  : '';
 
 				$content =
-					'<li' . ( ( $this->current_post_id == $p->id ) ? ' class="current"' : '' ) . '>'
+					'<li' . ( ( $this->current_post_id == $p->ID ) ? ' class="current"' : '' ) . '>'
 					. $thumb
-					. '<a ' . ( ( $this->current_post_id == $p->id ) ? '' : 'href="' . $permalink . '"' ) . ' title="' . esc_attr($title) . '" class="wpp-post-title" target="' . $this->user_settings['tools']['link']['target'] . '">' . $title_sub . '</a> '
+					. '<a ' . ( ( $this->current_post_id == $p->ID ) ? '' : 'href="' . $permalink . '"' ) . ' title="' . esc_attr($title) . '" class="wpp-post-title" target="' . $this->user_settings['tools']['link']['target'] . '">' . $title_sub . '</a> '
 					. $excerpt . $_stats
 					. $rating
 					. "</li>\n";
@@ -2009,26 +2067,26 @@ if ( !class_exists('WordpressPopularPosts') ) {
 
 			$cache = &$this->__cache(__FUNCTION__, array());
 
-			if ( isset($cache[$p->id]) ) {
-				return $cache[$p->id];
+			if ( isset($cache[$p->ID]) ) {
+				return $cache[$p->ID];
 			}
 
 			// WPML support, based on Serhat Evren's suggestion - see http://wordpress.org/support/topic/wpml-trick#post-5452607
 			if ( defined('ICL_LANGUAGE_CODE') && function_exists('icl_object_id') ) {
-				$current_id = icl_object_id( $p->id, get_post_type( $p->id ), true, ICL_LANGUAGE_CODE );
+				$current_id = icl_object_id( $p->ID, get_post_type( $p->ID ), true, ICL_LANGUAGE_CODE );
 				$title = get_the_title( $current_id );
 			} // Check for qTranslate
 			else if ( $this->qTrans && function_exists('qtrans_useCurrentLanguageIfNotFoundUseDefaultLanguage') ) {
 				$title = qtrans_useCurrentLanguageIfNotFoundUseDefaultLanguage( $p->title );
 			} // Use ol' plain title
 			else {
-				$title = $p->title;
+				$title = $p->post_title;
 			}
 
 			// Strip HTML tags
 			$title = strip_tags($title);
 
-			return $cache[$p->id] = apply_filters('the_title', $title, $p->id);
+			return $cache[$p->ID] = apply_filters('the_title', $title, $p->ID);
 
 		} // end _get_title
 
@@ -2044,8 +2102,8 @@ if ( !class_exists('WordpressPopularPosts') ) {
 
 			$cache = &$this->__cache(__FUNCTION__, array());
 
-			if ( isset($cache[$p->id]) ) {
-				return $cache[$p->id];
+			if ( isset($cache[$p->ID]) ) {
+				return $cache[$p->ID];
 			}
 
 			// TITLE
@@ -2068,7 +2126,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 				}
 			}
 
-			return $cache[$p->id] = $title_sub;
+			return $cache[$p->ID] = $title_sub;
 
 		} // end _get_title_sub
 
@@ -2087,7 +2145,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 			// EXCERPT
 			if ($instance['post-excerpt']['active']) {
 
-				$excerpt = trim($this->_get_summary($p->id, $instance));
+				$excerpt = trim($this->_get_summary($p->ID, $instance));
 
 				if (!empty($excerpt) && !$instance['markup']['custom_html']) {
 					$excerpt = '<span class="wpp-excerpt">' . $excerpt . '</span>';
@@ -2122,7 +2180,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 
 			// get image from custom field
 			if ($this->user_settings['tools']['thumbnail']['source'] == "custom_field") {
-				$path = get_post_meta($p->id, $this->user_settings['tools']['thumbnail']['field'], true);
+				$path = get_post_meta($p->ID, $this->user_settings['tools']['thumbnail']['field'], true);
 
 				if ($path != '') {
 					// user has requested to resize cf image
@@ -2148,7 +2206,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 					if ( current_theme_supports( 'post-thumbnails' ) ) {
 
 						// Featured image found, retrieve it
-						if ( has_post_thumbnail($p->id) ) {
+						if ( has_post_thumbnail($p->ID) ) {
 							$size = null;
 
 							foreach ( $this->default_thumbnail_sizes as $name => $attr ) :
@@ -2164,9 +2222,9 @@ if ( !class_exists('WordpressPopularPosts') ) {
 							}
 
 							if ( $this->user_settings['tools']['thumbnail']['responsive'] )
-								$thumb .= preg_replace( '/(width|height)=["\']\d*["\']\s?/', "", get_the_post_thumbnail($p->id, $size, array( 'class' => 'wpp-thumbnail wpp_featured_stock' )) );
+								$thumb .= preg_replace( '/(width|height)=["\']\d*["\']\s?/', "", get_the_post_thumbnail($p->ID, $size, array( 'class' => 'wpp-thumbnail wpp_featured_stock' )) );
 							else
-								$thumb .= get_the_post_thumbnail( $p->id, $size, array( 'class' => 'wpp-thumbnail wpp_featured_stock' ) );
+								$thumb .= get_the_post_thumbnail( $p->ID, $size, array( 'class' => 'wpp-thumbnail wpp_featured_stock' ) );
 						}
 						// No featured image found
 						else {
@@ -2181,7 +2239,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 				}
 				// Get/generate custom thumbnail
 				else {
-					$thumb .= $this->__get_img($p, $p->id, null, array($tbWidth, $tbHeight), $crop, $this->user_settings['tools']['thumbnail']['source'], $title);
+					$thumb .= $this->__get_img($p, $p->ID, null, array($tbWidth, $tbHeight), $crop, $this->user_settings['tools']['thumbnail']['source'], $title);
 				}
 
 			}
@@ -2246,18 +2304,18 @@ if ( !class_exists('WordpressPopularPosts') ) {
 
 			$cache = &$this->__cache(__FUNCTION__, array());
 
-			if ( isset($cache[$p->id]) ) {
-				return $cache[$p->id];
+			if ( isset($cache[$p->ID]) ) {
+				return $cache[$p->ID];
 			}
 
 			$rating = '';
 
 			// RATING
 			if (function_exists('the_ratings') && $instance['rating']) {
-				$rating = '<span class="wpp-rating">' . the_ratings('span', $p->id, false) . '</span>';
+				$rating = '<span class="wpp-rating">' . the_ratings('span', $p->ID, false) . '</span>';
 			}
 
-			return $cache[$p->id] = $rating;
+			return $cache[$p->ID] = $rating;
 		} // end _get_rating
 
 		/**
@@ -2272,15 +2330,15 @@ if ( !class_exists('WordpressPopularPosts') ) {
 
 			$cache = &$this->__cache(__FUNCTION__, array());
 
-			if ( isset($cache[$p->id]) ) {
-				return $cache[$p->id];
+			if ( isset($cache[$p->ID]) ) {
+				return $cache[$p->ID];
 			}
 
 			$author = ($instance['stats_tag']['author'])
-			  ? get_the_author_meta('display_name', $p->uid)
+			  ? get_the_author_meta('display_name', $p->guid)
 			  : "";
 
-			return $cache[$p->id] = $author;
+			return $cache[$p->ID] = $author;
 
 		} // end _get_author
 
@@ -2296,12 +2354,12 @@ if ( !class_exists('WordpressPopularPosts') ) {
 
 			$cache = &$this->__cache(__FUNCTION__, array());
 
-			if ( isset($cache[$p->id]) ) {
-				return $cache[$p->id];
+			if ( isset($cache[$p->ID]) ) {
+				return $cache[$p->ID];
 			}
 
-			$date = date_i18n($instance['stats_tag']['date']['format'], strtotime($p->date));
-			return $cache[$p->id] = $date;
+			$date = date_i18n($instance['stats_tag']['date']['format'], strtotime($p->post_date));
+			return $cache[$p->ID] = $date;
 
 		} // end _get_date
 
@@ -2321,12 +2379,12 @@ if ( !class_exists('WordpressPopularPosts') ) {
 
 				$cache = &$this->__cache(__FUNCTION__, array());
 
-				if ( isset($cache[$p->id]) ) {
-					return $cache[$p->id];
+				if ( isset($cache[$p->ID]) ) {
+					return $cache[$p->ID];
 				}
 
                 // Try and get parent category
-                $cats = get_the_category($p->id);
+                $cats = get_the_category($p->ID);
 
                 foreach( $cats as $cat ) {
                     if( $cat->category_parent == 0) {
@@ -2355,7 +2413,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 
 				}
 
-				return $cache[$p->id] = $post_cat;
+				return $cache[$p->ID] = $post_cat;
 
 			}
 
@@ -2375,8 +2433,8 @@ if ( !class_exists('WordpressPopularPosts') ) {
 
 			$cache = &$this->__cache(__FUNCTION__ . md5(json_encode($instance)), array());
 
-			if ( isset($cache[$p->id]) ) {
-				return $cache[$p->id];
+			if ( isset($cache[$p->ID]) ) {
+				return $cache[$p->ID];
 			}
 
 			$stats = array();
@@ -2427,7 +2485,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 			// author
 			if ($instance['stats_tag']['author']) {
 				$author = $this->_get_author($p, $instance);
-				$display_name = '<a href="' . get_author_posts_url($p->uid) . '">' . $author . '</a>';
+				$display_name = '<a href="' . get_author_posts_url($p->guid) . '">' . $author . '</a>';
 				$stats[] = '<span class="wpp-author">' . sprintf(__('by %s', $this->plugin_slug), $display_name).'</span>';
 			}
 
@@ -2446,7 +2504,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 				}
 			}
 
-			return $cache[$p->id] = $stats;
+			return $cache[$p->ID] = $stats;
 
 		} // end _get_stats
 
@@ -2491,7 +2549,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 				}
 				// Image is hosted outside WordPress
 				else {
-					$external_image = $this->__fetch_external_image($p->id, $image_url);
+					$external_image = $this->__fetch_external_image($p->ID, $image_url);
 
 					if ( !$external_image ) {
 						return $this->_render_image($this->default_thumbnail, $dim, 'wpp-thumbnail wpp_def_noPath wpp_no_external', $title);
@@ -2504,8 +2562,8 @@ if ( !class_exists('WordpressPopularPosts') ) {
 			$file_info = pathinfo($file_path);
 
 			// there is a thumbnail already
-			if ( file_exists(trailingslashit($this->uploads_dir['basedir']) . $p->id . '-' . $source . '-' . $dim[0] . 'x' . $dim[1] . '.' . $file_info['extension']) ) {
-				return $this->_render_image( trailingslashit($this->uploads_dir['baseurl']) . $p->id . '-' . $source . '-' . $dim[0] . 'x' . $dim[1] . '.' . $file_info['extension'], $dim, 'wpp-thumbnail wpp_cached_thumb wpp_' . $source, $title );
+			if ( file_exists(trailingslashit($this->uploads_dir['basedir']) . $p->ID . '-' . $source . '-' . $dim[0] . 'x' . $dim[1] . '.' . $file_info['extension']) ) {
+				return $this->_render_image( trailingslashit($this->uploads_dir['baseurl']) . $p->ID . '-' . $source . '-' . $dim[0] . 'x' . $dim[1] . '.' . $file_info['extension'], $dim, 'wpp-thumbnail wpp_cached_thumb wpp_' . $source, $title );
 			}
 
 			return $this->__image_resize($p, $file_path, $dim, $crop, $source);
@@ -2531,7 +2589,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 				$file_info = pathinfo($path);
 
 				$image->resize($dimension[0], $dimension[1], $crop);
-				$new_img = $image->save( trailingslashit($this->uploads_dir['basedir']) . $p->id . '-' . $source . '-' . $dimension[0] . 'x' . $dimension[1] . '.' . $file_info['extension'] );
+				$new_img = $image->save( trailingslashit($this->uploads_dir['basedir']) . $p->ID . '-' . $source . '-' . $dimension[0] . 'x' . $dimension[1] . '.' . $file_info['extension'] );
 
 				if ( is_wp_error($new_img) ) {
 					return $this->_render_image($this->default_thumbnail, $dimension, 'wpp-thumbnail wpp_imgeditor_error wpp_' . $source, '', $new_img->get_error_message());
@@ -2859,6 +2917,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 			* @var Bool $freshness
 			* @var String $order_by
 			* @var String $post_type
+			* @var String $post_formats
 			* @var String $pid
 			* @var String $cat
 			* @var String $author
@@ -2890,6 +2949,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 				'freshness' => false,
 				'order_by' => 'views',
 				'post_type' => 'post,page',
+        'post_formats' => '',
 				'pid' => '',
 				'cat' => '',
 				'author' => '',
@@ -2928,6 +2988,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 				'post_type' => empty($post_type) ? 'post,page' : $post_type,
 				'pid' => preg_replace('|[^0-9,]|', '', $pid),
 				'cat' => preg_replace('|[^0-9,-]|', '', $cat),
+				'post_formats' => $post_formats,
 				'author' => preg_replace('|[^0-9,]|', '', $author),
 				'shorten_title' => array(
 					'active' => (!empty($title_length) && $this->__is_numeric($title_length) && $title_length > 0),
