@@ -166,6 +166,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 			'pid' => '',
 			'author' => '',
 			'cat' => '',
+      'taxonomy' => array(),
 			'shorten_title' => array(
 				'active' => false,
 				'length' => 25,
@@ -1518,6 +1519,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 			$post_types = "";
 			$pids = "";
 			$cats = "";
+      $taxonomies = array();
 			$authors = "";
 			$content = "";
 
@@ -1629,6 +1631,16 @@ if ( !class_exists('WordpressPopularPosts') ) {
 				}
 
 			}
+
+      // other taxonomies
+      if (!empty($instance['taxonomy'])) {
+        $where .= " AND p.ID IN (
+          SELECT object_id
+          FROM {$wpdb->term_relationships} AS r
+             JOIN {$wpdb->term_taxonomy} AS x ON x.term_taxonomy_id = r.term_taxonomy_id
+          WHERE x.taxonomy = '{$instance['taxonomy']['name']}' AND x.term_id IN({$instance['taxonomy']['ids']})
+          )";
+      }
 
 			// * post formats
 			if ( !empty($instance['post_formats']) && $join_cats ) {
@@ -2952,6 +2964,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
         'post_formats' => '',
 				'pid' => '',
 				'cat' => '',
+        'taxonomy' => array(),
 				'author' => '',
 				'title_length' => 0,
 				'title_by_words' => 0,
@@ -2989,6 +3002,7 @@ if ( !class_exists('WordpressPopularPosts') ) {
 				'pid' => preg_replace('|[^0-9,]|', '', $pid),
 				'cat' => preg_replace('|[^0-9,-]|', '', $cat),
 				'post_formats' => $post_formats,
+        'taxonomy' => $taxonomy,
 				'author' => preg_replace('|[^0-9,]|', '', $author),
 				'shorten_title' => array(
 					'active' => (!empty($title_length) && $this->__is_numeric($title_length) && $title_length > 0),
